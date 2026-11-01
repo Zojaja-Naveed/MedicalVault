@@ -1,0 +1,10 @@
+.git
+evidence
+docs
+*.pdf
+medvault.db
+uploads
+archives
+__pycache__
+native/*.so
+native/demo

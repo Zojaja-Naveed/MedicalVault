@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Sign in{% endblock %}
+{% block head %}
+<style>
+  .auth { min-height: 100vh; display: grid; grid-template-columns: 1.1fr 1fr; }
+  .auth-side { background: var(--brand-dark); color: #e6f2ef; padding: 48px 56px; display: flex; flex-direction: column; justify-content: space-between; }
+  .auth-side .brand { color: #fff; }
+  .auth-side h1 { font-family: var(--serif); font-weight: 400; font-size: 40px; line-height: 1.15; max-width: 15ch; margin: 0 0 16px; color: #fff; }
+  .auth-side p { max-width: 42ch; color: #b8d6cf; margin: 0; }
+  .slip { margin-top: 36px; background: #fff; color: var(--ink); border-radius: 10px; padding: 16px 18px; max-width: 380px; box-shadow: 0 18px 40px rgba(4, 32, 27, .35); transform: rotate(-1.5deg); }
+  .slip-head { display: flex; justify-content: space-between; font-size: 12px; color: var(--ink-2); border-bottom: 1px dashed var(--line); padding-bottom: 8px; margin-bottom: 8px; }
+  .slip-row { display: grid; grid-template-columns: 1fr auto 28px; gap: 10px; font-size: 14px; padding: 4px 0; }
+  .slip-row b { font-weight: 600; }
+  .flag-h { color: var(--high); font-weight: 700; }
+  .auth-foot { font-size: 13px; color: #8fb9b0; }
+  .auth-main { display: grid; place-items: center; padding: 48px 24px; background: var(--paper); }
+  .auth-form { width: 100%; max-width: 360px; }
+  .auth-form h2 { font-size: 24px; margin-bottom: 6px; }
+  .auth-form .muted { margin: 0 0 28px; }
+  .auth-form .btn { width: 100%; justify-content: center; padding: 12px; font-size: 15px; margin-top: 6px; }
+  .help { margin-top: 24px; font-size: 13px; color: var(--ink-2); }
+  @media (max-width: 860px) { .auth { grid-template-columns: 1fr; } .auth-side { display: none; } }
+</style>
+{% endblock %}
+{% block body %}
+<div class="auth">
+  <section class="auth-side">
+    <a class="brand" href="#">
+      <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><rect width="28" height="28" rx="7" fill="#fff"/><path d="M8 7h12v3H8zM10 10h8v4.5a4 4 0 0 1-8 0z" fill="#1b6b5d"/><path d="M12 19h4v2.5h-4z" fill="#9fd6c8"/></svg>
+      MedVault
+    </a>
+    <div>
+      <h1>Your lab results, kept private.</h1>
+      <p>Receive reports straight from your diagnostic lab, check that each one is signed, and choose exactly which doctor can read it.</p>
+      <div class="slip" aria-hidden="true">
+        <div class="slip-head"><span>Lipid profile</span><span>Lab verified</span></div>
+        <div class="slip-row"><span>Total cholesterol</span><b class="num">212 mg/dL</b><span class="flag-h">H</span></div>
+        <div class="slip-row"><span>HDL</span><b class="num">39 mg/dL</b><span class="flag-h" style="color:var(--low)">L</span></div>
+        <div class="slip-row"><span>Triglycerides</span><b class="num">148 mg/dL</b><span></span></div>
+      </div>
+    </div>
+    <div class="auth-foot">Reports are visible only to you and the doctors you share them with.</div>
+  </section>
+  <section class="auth-main">
+    <form class="auth-form" method="post" action="{{ url_for('login') }}">
+      {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
+      <h2>Sign in</h2>
+      <p class="muted">Use the account your lab created for you.</p>
+      {% for msg in get_flashed_messages() %}<div class="flash" role="alert">{{ msg }}</div>{% endfor %}
+      <div class="field">
+        <label for="username">Username</label>
+        <input id="username" name="username" autocomplete="username" required autofocus>
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required>
+      </div>
+      <button class="btn" type="submit">Sign in</button>
+      <p class="help">No account yet? Ask the lab front desk when you collect your sample.</p>
+    </form>
+  </section>
+</div>
+{% endblock %}

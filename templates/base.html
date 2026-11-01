@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}MedVault{% endblock %} · MedVault</title>
+  <style>
+    :root {
+      --ink: #12302c;        /* deep clinical ink */
+      --ink-2: #4b615d;      /* secondary text */
+      --line: #d7e1df;       /* hairlines */
+      --wash: #eef3f2;       /* page background */
+      --paper: #ffffff;      /* report paper */
+      --brand: #1b6b5d;      /* surgical green */
+      --brand-dark: #12483f;
+      --high: #b42318;       /* result above range */
+      --low: #1d4ed8;        /* result below range */
+      --ok: #157347;
+      --radius-s: 6px;
+      --radius-l: 14px;
+      --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+      --sans: "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; }
+    body { font: 15px/1.55 var(--sans); color: var(--ink); background: var(--wash); }
+    a { color: var(--brand); }
+    a:focus-visible, button:focus-visible, input:focus-visible { outline: 3px solid #7cc4b5; outline-offset: 2px; }
+
+    .topbar { background: var(--paper); border-bottom: 1px solid var(--line); }
+    .topbar-inner { max-width: 1120px; margin: 0 auto; padding: 12px 24px; display: flex; align-items: center; gap: 24px; }
+    .brand { display: flex; align-items: center; gap: 10px; color: var(--ink); text-decoration: none; font-weight: 650; font-size: 17px; }
+    .brand svg { flex: none; }
+    .nav { display: flex; gap: 4px; margin-right: auto; }
+    .nav a { color: var(--ink-2); text-decoration: none; padding: 6px 12px; border-radius: var(--radius-s); }
+    .nav a.active, .nav a:hover { background: var(--wash); color: var(--ink); }
+    .who { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--ink-2); }
+    .avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--brand); color: #fff; display: grid; place-items: center; font-weight: 600; text-transform: uppercase; }
+    .who strong { color: var(--ink); display: block; line-height: 1.2; }
+    .signout { margin-left: 8px; font-size: 14px; color: var(--ink-2); }
+
+    main { max-width: 1120px; margin: 0 auto; padding: 28px 24px 64px; }
+    h1 { font-size: 26px; line-height: 1.25; margin: 0 0 4px; font-weight: 650; }
+    h2 { font-size: 17px; margin: 0 0 12px; font-weight: 650; }
+    .muted { color: var(--ink-2); }
+    .flash { display: flex; gap: 10px; align-items: center; background: #e7f3ef; border: 1px solid #b9dccf; color: var(--brand-dark); padding: 10px 14px; border-radius: var(--radius-s); margin-bottom: 20px; }
+
+    .panel { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius-l); padding: 20px; }
+    .btn { display: inline-flex; align-items: center; gap: 8px; border: 0; border-radius: var(--radius-s); padding: 9px 16px; font: 600 14px var(--sans); cursor: pointer; background: var(--brand); color: #fff; text-decoration: none; }
+    .btn:hover { background: var(--brand-dark); }
+    .btn-quiet { background: var(--wash); color: var(--ink); border: 1px solid var(--line); }
+    .btn-quiet:hover { background: #e2eae8; }
+    label { display: block; font-size: 13px; font-weight: 600; margin: 0 0 6px; color: var(--ink-2); }
+    input[type=text], input[type=password], input:not([type]) { width: 100%; padding: 10px 12px; border: 1px solid #c3d0cd; border-radius: var(--radius-s); font: 15px var(--sans); color: var(--ink); background: #fff; }
+    .field { margin-bottom: 16px; }
+
+    .status { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
+    .status.verified { background: #e3f4ea; color: var(--ok); }
+    .status.unverified { background: #fdecea; color: var(--high); }
+    .num { font-variant-numeric: tabular-nums; }
+
+    @media (max-width: 760px) {
+      .nav { display: none; }
+      .who span.meta { display: none; }
+      .topbar-inner { justify-content: space-between; }
+    }
+    @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+  </style>
+  {% block head %}{% endblock %}
+</head>
+<body>
+{% if user %}
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="{{ url_for('dashboard') }}">
+      <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><rect width="28" height="28" rx="7" fill="#1b6b5d"/><path d="M8 7h12v3H8zM10 10h8v4.5a4 4 0 0 1-8 0z" fill="#fff"/><path d="M12 19h4v2.5h-4z" fill="#9fd6c8"/></svg>
+      MedVault
+    </a>
+    <nav class="nav" aria-label="Main">
+      <a href="{{ url_for('dashboard') }}" class="{% if request.endpoint == 'dashboard' %}active{% endif %}">{% if user.role == 'doctor' %}Shared with me{% else %}My reports{% endif %}</a>
+    </nav>
+    <div class="who">
+      <div class="avatar" aria-hidden="true">{{ user.username[:2] }}</div>
+      <span class="meta"><strong>{{ user.username }}</strong>{{ user.role|capitalize }}</span>
+      <a class="signout" href="{{ url_for('logout') }}">Sign out</a>
+    </div>
+  </div>
+</header>
+{% endif %}
+{% block body %}
+<main>
+  {% for msg in get_flashed_messages() %}
+  <div class="flash" role="status"><svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M10 9v5M10 6v.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>{{ msg }}</div>
+  {% endfor %}
+  {% block content %}{% endblock %}
+</main>
+{% endblock %}
+</body>
+</html>
