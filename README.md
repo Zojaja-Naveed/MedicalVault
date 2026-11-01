@@ -5,13 +5,14 @@ CYC386 Secure Software Design and Development – Midterm Lab DevSecOps Sprint (
 MedVault lets patients upload lab reports (`.lab` files), view them, compress them and share them with their doctors.
 A native C library (`native/parser.c`) reads each report header and checks the lab's "verified" signature.
 
-> ⚠️ The `v0-vulnerable` tag contains five deliberate vulnerabilities for the lab demonstration
+> ⚠️ Commit `98478ce` (main before PR #6) is the deliberately vulnerable baseline used for the lab demonstration
 > (Buffer Overflow, Command Injection, IDOR, CSRF, Clickjacking). Run it only on your own machine.
+> The current `main` branch contains all fixes.
 
 ## Team
 
 - Zojaja Naveed – Developer / Security Tester / DevOps
-- tayyebacodes – Developer / Security Tester / DevOps
+- Tayyeba Usman (tayyebacodes) – Developer / Security Tester / DevOps
 
 ## Tech stack
 
@@ -47,7 +48,25 @@ Open http://localhost:5000
 | `attacker/` | Attacker pages for the CSRF and clickjacking demos |
 | `docs/` | PNE report, threat model, diagrams |
 
+## Run the security tests
+
+```bash
+gcc -shared -fPIC -O2 -fstack-protector-strong -D_FORTIFY_SOURCE=2 -o native/libparser.so native/parser.c
+pip install -r requirements.txt pytest
+pytest -v tests
+```
+
+The same exploit-replay tests, plus AddressSanitizer, Bandit, Semgrep, Trivy and OWASP ZAP, run automatically in
+GitHub Actions (`.github/workflows/ci-cd.yml`) on every push and pull request. Merging into `main` requires all checks to pass.
+
 ## Documentation
 
-- `PNE_Report.pdf` – protection needs and CIA mapping
-- `THREAT_MODEL.pdf` – DFDs, STRIDE, attack trees, CVSS, risk register
+| Document | Contents |
+|---|---|
+| `Final_Report.pdf` | Final IEEE-style report (editable: `docs/Final_Report.docx`) |
+| `PNE_Report.pdf` | Assets, protection needs, CIA mapping |
+| `THREAT_MODEL.pdf` | DFDs, STRIDE, attack trees, CVSS v3.1, risk register |
+| `SECURITY_IMPLEMENTATION.md` | Each vulnerability: vulnerable code, exploit evidence, fix, verification |
+| `SECURITY_TEST_REPORT.md` | SAST/DAST configuration and before/after results |
+| `SECURITY.md` / `CONTRIBUTING.md` | Security policy and contribution workflow |
+| `docs/screenshots/` | All evidence screenshots |
