@@ -1,13 +1,16 @@
 """
 MedVault - diagnostic lab report portal (CYC386 Secure Software lab sprint)
 
-WARNING: this is the deliberately VULNERABLE baseline (tag v0-vulnerable).
-Run it only on your own machine for the lab demonstration.
-Known issues: T-01 buffer overflow (native/parser.c), T-02 command injection,
-T-03 IDOR, T-04 CSRF, T-05 clickjacking, T-06 hard-coded secret, T-07 debug mode.
+Hardened version. Fixes: T-01 buffer overflow (native/parser.c), T-02 command
+injection, T-03 IDOR, T-04 CSRF, T-05 clickjacking, T-06 hard-coded secret,
+T-07 debug mode, T-08 audit logging.
 """
 import ctypes
+import hmac
+import logging
 import os
+import re
+import secrets
 import sqlite3
 import subprocess
 import uuid
@@ -19,10 +22,22 @@ from werkzeug.security import check_password_hash, generate_password_hash
 BASE = os.path.dirname(os.path.abspath(__file__))
 UPLOADS = os.path.join(BASE, "uploads")
 ARCHIVES = os.path.join(BASE, "archives")
-DB_PATH = os.path.join(BASE, "medvault.db")
+DB_PATH = os.environ.get("MEDVAULT_DB", os.path.join(BASE, "medvault.db"))
 
 app = Flask(__name__)
-app.config["SECRET_KEY"] = "medvault-dev-secret-123"   # T-06: hard-coded secret
+# T-06 FIX: secret comes from the environment, random fallback (never in source code)
+app.config["SECRET_KEY"] = os.environ.get("MEDVAULT_SECRET_KEY") or secrets.token_hex(32)
+# T-04 FIX (defence in depth): cookie never sent on cross-site requests
+app.config["SESSION_COOKIE_SAMESITE"] = "Strict"
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SECURE"] = os.environ.get("MEDVAULT_SECURE_COOKIES", "0") == "1"
+app.config["MAX_CONTENT_LENGTH"] = 1024 * 1024   # PN-06: 1 MB upload limit
+
+ARCHIVE_NAME_RE = re.compile(r"^[A-Za-z0-9_-]{1,40}$")   # T-02 FIX: allow-list
+
+# T-08 FIX: audit log of security-relevant actions
+logging.basicConfig(level=logging.INFO, format="%(asctime)s AUDIT %(message)s")
+audit = logging.getLogger("medvault.audit")
 
 
 # ---------------------------------------------------------------- native parser
@@ -106,9 +121,57 @@ def login_required(view):
     return wrapper
 
 
+def get_report_for_user(report_id, owner_only=False):
+    """T-03 FIX: central object-level authorization.
+    Patients may access only their own reports; doctors only reports shared with them.
+    Anything else returns 404 so attackers cannot even tell the report exists."""
+    user = current_user()
+    report = db().execute("SELECT * FROM reports WHERE id = ?", (report_id,)).fetchone()
+    if report is None or user is None:
+        abort(404)
+    if report["owner_id"] == user["id"]:
+        return report
+    if not owner_only and user["role"] == "doctor":
+        shared = db().execute("SELECT 1 FROM shares WHERE report_id = ? AND doctor_id = ?",
+                              (report_id, user["id"])).fetchone()
+        if shared:
+            return report
+    audit.info("DENIED user=%s report=%s", user["username"], report_id)
+    abort(404)
+
+
+# ---------------------------------------------------------------- CSRF protection
+def csrf_token():
+    """T-04 FIX: one random synchronizer token per session."""
+    if "csrf_token" not in session:
+        session["csrf_token"] = secrets.token_urlsafe(32)
+    return session["csrf_token"]
+
+
+@app.before_request
+def check_csrf():
+    if request.method == "POST":
+        sent = request.form.get("csrf_token", "")
+        expected = session.get("csrf_token", "")
+        if not expected or not hmac.compare_digest(sent, expected):
+            audit.info("CSRF REJECTED path=%s", request.path)
+            abort(400, "Invalid or missing CSRF token")
+
+
+# ---------------------------------------------------------------- security headers
+@app.after_request
+def security_headers(resp):
+    resp.headers["X-Frame-Options"] = "DENY"                                   # T-05 FIX
+    resp.headers["Content-Security-Policy"] = "frame-ancestors 'none'; default-src 'self'; style-src 'self' 'unsafe-inline'"
+    resp.headers["X-Content-Type-Options"] = "nosniff"
+    resp.headers["Referrer-Policy"] = "no-referrer"
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
+
+
 @app.context_processor
 def inject_user():
-    return {"user": current_user()}
+    return {"user": current_user(), "csrf_token": csrf_token}
 
 
 # ---------------------------------------------------------------- routes
@@ -125,7 +188,9 @@ def login():
         if row and check_password_hash(row["password_hash"], request.form.get("password", "")):
             session.clear()
             session["user_id"] = row["id"]
+            audit.info("LOGIN user=%s", row["username"])
             return redirect(url_for("dashboard"))
+        audit.info("LOGIN FAILED user=%s", request.form.get("username", "")[:40])
         flash("Invalid username or password")
     return render_template("login.html")
 
@@ -159,7 +224,8 @@ def upload():
     text = f.read().decode("utf-8", "replace")
     status, name = parse_header(text.splitlines()[0] if text else "")
     if status < 0:
-        flash("Invalid report header")
+        audit.info("UPLOAD REJECTED user=%s reason=bad-header", current_user()["username"])
+        flash("Invalid report header: patient name must be 1-31 characters")
         return redirect(url_for("dashboard"))
     stored = uuid.uuid4().hex + ".lab"
     with open(os.path.join(UPLOADS, stored), "w", encoding="utf-8") as out:
@@ -167,6 +233,7 @@ def upload():
     db().execute("INSERT INTO reports (owner_id, patient_name, verified, stored_name, original_name)"
                  " VALUES (?,?,?,?,?)", (current_user()["id"], name, int(status == 1), stored, f.filename))
     db().commit()
+    audit.info("UPLOAD user=%s verified=%s", current_user()["username"], int(status == 1))
     flash("Report uploaded")
     return redirect(url_for("dashboard"))
 
@@ -174,10 +241,7 @@ def upload():
 @app.route("/report/<int:report_id>")
 @login_required
 def view_report(report_id):
-    # T-03 IDOR: loads ANY report by id, never checks who owns it
-    report = db().execute("SELECT * FROM reports WHERE id = ?", (report_id,)).fetchone()
-    if report is None:
-        abort(404)
+    report = get_report_for_user(report_id)          # T-03 FIX
     with open(os.path.join(UPLOADS, report["stored_name"]), encoding="utf-8") as f:
         content = f.read()
     shared_with = db().execute(
@@ -189,7 +253,7 @@ def view_report(report_id):
 @app.route("/report/<int:report_id>/share", methods=["POST"])
 @login_required
 def share_report(report_id):
-    # T-04 CSRF: no anti-CSRF token is checked
+    get_report_for_user(report_id, owner_only=True)  # only the owner may share (token checked in check_csrf)
     doctor = db().execute("SELECT * FROM users WHERE username = ? AND role = 'doctor'",
                           (request.form.get("doctor", ""),)).fetchone()
     if doctor is None:
@@ -198,6 +262,7 @@ def share_report(report_id):
         db().execute("INSERT OR IGNORE INTO shares (report_id, doctor_id) VALUES (?, ?)",
                      (report_id, doctor["id"]))
         db().commit()
+        audit.info("SHARE user=%s report=%s doctor=%s", current_user()["username"], report_id, doctor["username"])
         flash("Report shared with " + doctor["username"])
     return redirect(url_for("view_report", report_id=report_id))
 
@@ -205,13 +270,17 @@ def share_report(report_id):
 @app.route("/report/<int:report_id>/compress", methods=["POST"])
 @login_required
 def compress_report(report_id):
-    report = db().execute("SELECT * FROM reports WHERE id = ?", (report_id,)).fetchone()
-    if report is None:
-        abort(404)
+    report = get_report_for_user(report_id, owner_only=True)
     archive = request.form.get("archive_name", "report")
-    # T-02 COMMAND INJECTION: user input is pasted into a shell command
-    cmd = f"tar -czf archives/{archive}.tar.gz -C uploads {report['stored_name']}"
-    subprocess.run(cmd, shell=True, cwd=BASE)
+    # T-02 FIX: strict allow-list, then an argument list with NO shell
+    if not ARCHIVE_NAME_RE.fullmatch(archive):
+        audit.info("COMPRESS REJECTED user=%s name=%r", current_user()["username"], archive[:60])
+        abort(400, "Archive name may contain only letters, digits, - and _")
+    subprocess.run(  # nosec B603 - fixed argv, validated input, no shell
+        ["tar", "-czf", os.path.join(ARCHIVES, archive + ".tar.gz"),
+         "-C", UPLOADS, report["stored_name"]],
+        shell=False, check=True, timeout=15)
+    audit.info("COMPRESS user=%s report=%s", current_user()["username"], report_id)
     flash(f"Archive created: {archive}.tar.gz")
     return redirect(url_for("view_report", report_id=report_id))
 
@@ -225,4 +294,5 @@ def download_archive(filename):
 init_db()
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)   # T-07: debug mode on
+    # T-07 FIX: debug never on; production runs under gunicorn (see Dockerfile)
+    app.run(host="127.0.0.1", port=5000, debug=False)
