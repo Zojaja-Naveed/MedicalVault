@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+{% block title %}Report #{{ report.id }}{% endblock %}
+{% block head %}
+<style>
+  .back { display: inline-block; margin-bottom: 16px; font-size: 14px; text-decoration: none; }
+  .layout { display: grid; grid-template-columns: 1fr 300px; gap: 20px; align-items: start; }
+  .sheet { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius-l); padding: 32px 36px; position: relative; }
+  .letterhead { display: flex; justify-content: space-between; gap: 16px; border-bottom: 2px solid var(--ink); padding-bottom: 14px; margin-bottom: 20px; }
+  .lab-name { font-family: var(--serif); font-size: 22px; line-height: 1.2; }
+  .lab-sub { font-size: 13px; color: var(--ink-2); }
+  .stamp { align-self: flex-start; border: 2px solid currentColor; border-radius: 8px; padding: 6px 12px; font-weight: 700; font-size: 13px; line-height: 1.3; text-align: center; transform: rotate(3deg); }
+  .stamp.ok { color: var(--ok); }
+  .stamp.bad { color: var(--high); }
+  .stamp small { display: block; font-weight: 500; font-size: 11px; }
+  .patient { display: grid; grid-template-columns: repeat(3, auto); justify-content: start; gap: 6px 40px; margin-bottom: 24px; font-size: 14px; }
+  .patient span { color: var(--ink-2); font-size: 12px; display: block; }
+  .patient b { overflow-wrap: anywhere; }
+  .test-name { font-family: var(--serif); font-size: 19px; margin: 0 0 10px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th { text-align: left; font-size: 12px; font-weight: 600; color: var(--ink-2); padding: 8px 8px; border-bottom: 1px solid var(--line); }
+  td { padding: 11px 8px; border-bottom: 1px solid #edf2f1; vertical-align: middle; }
+  td.val { font-weight: 650; white-space: nowrap; }
+  td.val.h { color: var(--high); } td.val.l { color: var(--low); }
+  .flag { font-weight: 700; width: 24px; }
+  .flag.h { color: var(--high); } .flag.l { color: var(--low); }
+  .range { position: relative; height: 6px; width: 120px; border-radius: 3px; background: linear-gradient(90deg, #dbe6f9 0 20%, #d4ece2 20% 80%, #f9dcd9 80% 100%); }
+  .range i { position: absolute; top: -4px; width: 4px; height: 14px; margin-left: -2px; border-radius: 2px; background: var(--ink); }
+  .ref { color: var(--ink-2); white-space: nowrap; }
+  .notes { margin-top: 20px; padding: 12px 14px; background: #f6f9f8; border-left: 3px solid var(--brand); font-size: 14px; }
+  .raw summary { cursor: pointer; font-size: 13px; color: var(--ink-2); margin-top: 22px; }
+  .raw pre { background: #f6f9f8; padding: 12px; border-radius: var(--radius-s); white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; }
+  .side .panel + .panel { margin-top: 16px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 14px; padding: 0; list-style: none; }
+  .chips li { background: var(--wash); border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; font-size: 13px; }
+  .side p { font-size: 13px; margin: 0 0 12px; }
+  .side .btn { width: 100%; justify-content: center; margin-top: 4px; }
+  @media (max-width: 860px) { .layout { grid-template-columns: 1fr; } .sheet { padding: 22px 18px; } .range { display: none; } .patient { grid-template-columns: 1fr 1fr; } }
+</style>
+{% endblock %}
+{% block content %}
+{% set lines = content.splitlines() %}
+{% set ns = namespace(lab='Diagnostic laboratory', test='Laboratory report', results=[], notes=[]) %}
+{% for line in lines[1:] %}
+  {% if ':' in line %}
+    {% set k = line.split(':', 1)[0]|trim %}
+    {% set v = line.split(':', 1)[1]|trim %}
+    {% if k == 'Lab' %}{% set ns.lab = v %}
+    {% elif k == 'Test' %}{% set ns.test = v %}
+    {% elif k == 'Note' %}{% set ns.notes = ns.notes + [v] %}
+    {% else %}{% set ns.results = ns.results + [(k, v)] %}{% endif %}
+  {% elif line|trim %}{% set ns.notes = ns.notes + [line|trim] %}{% endif %}
+{% endfor %}
+
+<a class="back" href="{{ url_for('dashboard') }}">&#8249; Back to reports</a>
+<div class="layout">
+  <article class="sheet">
+    <header class="letterhead">
+      <div>
+        <div class="lab-name">{{ ns.lab }}</div>
+        <div class="lab-sub">Report #{{ report.id }} &middot; {{ report.original_name }}</div>
+      </div>
+      {% if report.verified %}
+      <div class="stamp ok">Lab verified<small>Signature checked</small></div>
+      {% else %}
+      <div class="stamp bad">Unverified<small>No lab signature</small></div>
+      {% endif %}
+    </header>
+
+    <div class="patient">
+      <div><span>Patient</span><b>{{ report.patient_name }}</b></div>
+      <div><span>Report ID</span><b class="num">MV-{{ '%05d' % report.id }}</b></div>
+      <div><span>Shared with</span><b>{{ shared_with|length }} doctor{{ '' if shared_with|length == 1 else 's' }}</b></div>
+    </div>
+
+    <h2 class="test-name">{{ ns.test }}</h2>
+    {% if ns.results %}
+    <table>
+      <thead><tr><th>Test</th><th>Result</th><th></th><th>Reference range</th><th></th></tr></thead>
+      <tbody>
+      {% for name, value in ns.results %}
+        {% set parts = value.split(' (ref ') %}
+        {% set result = parts[0] %}
+        {% set ref = parts[1].rstrip(')') if parts|length > 1 else '' %}
+        {% set x = result.split(' ')[0]|float(none) %}
+        {% set r = namespace(lo=none, hi=none, flag='') %}
+        {% if ref.startswith('<') %}{% set r.hi = ref[1:].strip().split(' ')[0]|float(none) %}
+        {% elif ref.startswith('>') %}{% set r.lo = ref[1:].strip().split(' ')[0]|float(none) %}
+        {% elif '-' in ref %}{% set r.lo = ref.split('-')[0]|float(none) %}{% set r.hi = ref.split('-')[1].split(' ')[0]|float(none) %}{% endif %}
+        {% if x is not none and r.hi is not none and x > r.hi %}{% set r.flag = 'h' %}
+        {% elif x is not none and r.lo is not none and x < r.lo %}{% set r.flag = 'l' %}{% endif %}
+        <tr>
+          <td>{{ name }}</td>
+          <td class="val num {{ r.flag }}">{{ result }}</td>
+          <td class="flag {{ r.flag }}">{{ r.flag|upper }}</td>
+          <td class="ref num">{{ ref }}</td>
+          <td>
+            {% if x is not none and r.lo is not none and r.hi is not none and r.hi > r.lo %}
+              {% set pos = 20 + (x - r.lo) / (r.hi - r.lo) * 60 %}
+              <div class="range" aria-hidden="true"><i style="left: {{ [[pos, 2]|max, 98]|min }}%"></i></div>
+            {% elif x is not none and (r.lo is not none or r.hi is not none) %}
+              <div class="range" aria-hidden="true"><i style="left: {{ 90 if r.flag == 'h' else (10 if r.flag == 'l' else 50) }}%"></i></div>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+    {% for n in ns.notes %}<div class="notes">{{ n }}</div>{% endfor %}
+
+    <details class="raw">
+      <summary>Show original file</summary>
+      <pre>{{ content }}</pre>
+    </details>
+  </article>
+
+  <aside class="side">
+    <section class="panel">
+      <h2>Doctor access</h2>
+      {% if shared_with %}
+      <ul class="chips">{% for s in shared_with %}<li>Dr. {{ s.username }}</li>{% endfor %}</ul>
+      {% else %}
+      <p class="muted">Only you can see this report.</p>
+      {% endif %}
+      {% if user.role == 'patient' %}
+      <form method="post" action="{{ url_for('share_report', report_id=report.id) }}">
+        {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
+        <div class="field">
+          <label for="doctor">Doctor's MedVault username</label>
+          <input id="doctor" name="doctor" required>
+        </div>
+        <button type="submit" class="btn" id="share-btn">Give access</button>
+      </form>
+      {% endif %}
+    </section>
+    {% if user.role == 'patient' %}
+    <section class="panel">
+      <h2>Download</h2>
+      <p class="muted">Save a compressed copy of this report.</p>
+      <form method="post" action="{{ url_for('compress_report', report_id=report.id) }}">
+        {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
+        <div class="field">
+          <label for="archive_name">File name</label>
+          <input id="archive_name" name="archive_name" value="report{{ report.id }}">
+        </div>
+        <button type="submit" class="btn btn-quiet">Create .tar.gz</button>
+      </form>
+    </section>
+    {% endif %}
+  </aside>
+</div>
+{% endblock %}

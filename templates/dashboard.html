@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}{% if user.role == 'doctor' %}Shared with me{% else %}My reports{% endif %}{% endblock %}
+{% block head %}
+<style>
+  .head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; margin-bottom: 22px; flex-wrap: wrap; }
+  .summary { display: flex; gap: 28px; }
+  .summary div { font-size: 13px; color: var(--ink-2); }
+  .summary b { display: block; font-size: 22px; color: var(--ink); font-weight: 650; }
+  .layout { display: grid; grid-template-columns: 1fr 300px; gap: 20px; align-items: start; }
+  .list { padding: 0; overflow: hidden; }
+  .row { display: grid; grid-template-columns: 44px 1fr auto auto; gap: 16px; align-items: center; padding: 14px 20px; border-top: 1px solid var(--line); text-decoration: none; color: inherit; }
+  .row:first-of-type { border-top: 0; }
+  .row:hover { background: #f6f9f8; }
+  .doc { width: 44px; height: 52px; border: 1px solid var(--line); border-radius: 4px; background: #fbfdfc; display: grid; place-items: center; color: var(--brand); font-size: 11px; font-weight: 700; }
+  .row .title { font-weight: 600; }
+  .row .sub { font-size: 13px; color: var(--ink-2); overflow-wrap: anywhere; }
+  .chev { color: #9bb0ab; }
+  .empty { padding: 40px 20px; text-align: center; color: var(--ink-2); }
+  .drop { border: 1.5px dashed #a9c3bd; border-radius: 10px; padding: 18px; text-align: center; background: #f7fbfa; margin: 12px 0; }
+  .drop input { width: 100%; font-size: 13px; }
+  .tip { font-size: 13px; color: var(--ink-2); margin: 0; }
+  @media (max-width: 860px) { .layout { grid-template-columns: 1fr; } .row { grid-template-columns: 44px 1fr; } .row .status, .chev { grid-column: 2; } }
+</style>
+{% endblock %}
+{% block content %}
+{% set verified_count = reports|selectattr('verified')|list|length %}
+<div class="head">
+  <div>
+    <h1>{% if user.role == 'doctor' %}Reports shared with you{% else %}Hello, {{ user.username|capitalize }}{% endif %}</h1>
+    <p class="muted" style="margin:0">{% if user.role == 'doctor' %}Patients have given you access to these results.{% else %}All lab reports you have received, newest last.{% endif %}</p>
+  </div>
+  <div class="summary">
+    <div><b class="num">{{ reports|length }}</b>Reports</div>
+    <div><b class="num">{{ verified_count }}</b>Lab verified</div>
+    <div><b class="num">{{ reports|length - verified_count }}</b>Unverified</div>
+  </div>
+</div>
+
+<div class="layout">
+  <section class="panel list" aria-label="Reports">
+    {% for r in reports %}
+    <a class="row" href="{{ url_for('view_report', report_id=r.id) }}">
+      <span class="doc" aria-hidden="true">LAB</span>
+      <span>
+        <span class="title">{{ r.patient_name }}</span><br>
+        <span class="sub">Report #{{ r.id }} &middot; {{ r.original_name }}</span>
+      </span>
+      {% if r.verified %}
+      <span class="status verified"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6.5l2.5 2.5L10 3.5" fill="none" stroke="currentColor" stroke-width="2"/></svg>Lab verified</span>
+      {% else %}
+      <span class="status unverified">Unverified</span>
+      {% endif %}
+      <span class="chev" aria-hidden="true">&#8250;</span>
+    </a>
+    {% else %}
+    <div class="empty">
+      {% if user.role == 'doctor' %}No patient has shared a report with you yet.{% else %}You have no reports yet. Upload the .lab file your lab gave you.{% endif %}
+    </div>
+    {% endfor %}
+  </section>
+
+  {% if user.role == 'patient' %}
+  <aside class="panel">
+    <h2>Add a report</h2>
+    <p class="tip">Upload the .lab file from your diagnostic lab. We check the lab's signature automatically.</p>
+    <form method="post" action="{{ url_for('upload') }}" enctype="multipart/form-data">
+      {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
+      <div class="drop">
+        <input type="file" name="report" accept=".lab" required aria-label="Report file">
+      </div>
+      <button class="btn" type="submit" style="width:100%;justify-content:center">Upload report</button>
+    </form>
+  </aside>
+  {% endif %}
+</div>
+{% endblock %}

